@@ -1,5 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { Helmet } from 'react-helmet-async';
+import { useSearchParams } from 'react-router';
+import { z } from 'zod';
 
+import { getOrder } from '@/api/get-order.ts';
 import { Pagination } from '@/components/pagination.tsx';
 import {
   Table,
@@ -12,6 +16,34 @@ import { OrderTableFilters } from '@/pages/app/orders/order-table-filters.tsx';
 import { OrderTalbeRow } from '@/pages/app/orders/order-talbe-row.tsx';
 
 export function Orders() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const orderId = searchParams.get('orderId');
+  const customerName = searchParams.get('customerName');
+  const status = searchParams.get('status');
+
+  const pageIndex = z.coerce
+    .number()
+    .transform((page) => page - 1)
+    .parse(searchParams.get('page') || '1');
+  const { data: result } = useQuery({
+    queryKey: ['orders', pageIndex, orderId, customerName, status],
+    queryFn: () =>
+      getOrder({
+        pageIndex: pageIndex,
+        orderId,
+        customerName,
+        status: status == 'all' ? null : status,
+      }),
+  });
+
+  function handlePageChange(page: number) {
+    setSearchParams((prev) => {
+      prev.set('page', (page + 1).toString());
+      return prev;
+    });
+  }
+
   return (
     <div>
       <Helmet title="Orders" />
@@ -35,13 +67,20 @@ export function Orders() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Array.from({ length: 10 }).map((_, index) => {
-                  return <OrderTalbeRow key={index} />;
-                })}
+                {result?.orders?.map((order) => (
+                  <OrderTalbeRow key={order.orderId} order={order} />
+                ))}
               </TableBody>
             </Table>
           </div>
-          <Pagination pageIndex={1} totalCount={20} perPage={1} />
+          {result && (
+            <Pagination
+              pageIndex={result.meta.pageIndex}
+              totalCount={result.meta.totalCount}
+              perPage={result.meta.perPage}
+              onChange={handlePageChange}
+            />
+          )}
         </div>
       </div>
     </div>
